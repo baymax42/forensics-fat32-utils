@@ -20,6 +20,8 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='List volumes (deleted ones too)')
     parser.add_argument('path', metavar='image', type=str,
                         help='path to raw image file')
+    parser.add_argument('--offset', metavar='offset', type=int, default=0,
+                        help='offset to start looking')
 
     args = parser.parse_args()
     absolute_image_path = path.abspath(args.path)
@@ -28,13 +30,15 @@ if __name__ == '__main__':
     file_size = os.path.getsize(absolute_image_path)
     fileno = file.fileno()
     file_map = mmap.mmap(fileno, 0, mmap.MAP_SHARED, mmap.ACCESS_READ)
+
+    file_map.seek(args.offset)
     while sector := file_map.read(512):
         curr_pos = file_map.tell()
         try:
             # Perform simple validation
             vfat = Vfat.from_bytes(sector)
             if not check_vfat(vfat):
-                continue
+                raise ValueError
             file_map.seek(-512, os.SEEK_CUR)
             vfat = Vfat.from_io(file_map)
             file_map.seek(curr_pos - 512)
@@ -43,15 +47,15 @@ if __name__ == '__main__':
             total_ls = max(vfat.boot_sector.bpb.total_ls_2, vfat.boot_sector.bpb.total_ls_4,
                            vfat.boot_sector.ls_per_fat)
             if total_ls * vfat.boot_sector.bpb.bytes_per_ls > file_size - curr_pos:
-                continue
+                raise ValueError
             print(
                 f"Found FAT32 at: {file_map.tell()} of size {total_ls} (in logical sectors) - {vfat.boot_sector.oem_name}")
             file_map.seek(total_ls * vfat.boot_sector.bpb.bytes_per_ls, os.SEEK_CUR)
         except UnicodeDecodeError:
-            continue
+            pass
         except ValidationNotEqualError:
-            continue
+            pass
         except EOFError:
-            print("oops")
-            file_map.seek(curr_pos)
-            continue
+            pass
+        except ValueError:
+            pass

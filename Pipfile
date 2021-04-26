@@ -5,6 +5,8 @@ name = "pypi"
 
 [packages]
 kaitaistruct = "*"
+dit = "*"
+matplotlib = "*"
 
 [dev-packages]
 
